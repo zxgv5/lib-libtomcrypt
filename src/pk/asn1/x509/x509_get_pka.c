@@ -9,7 +9,7 @@
 
 #ifdef LTC_DER
 
-int x509_get_pka(ltc_asn1_list *pub, enum ltc_pka_id *pka)
+int x509_get_pka(const ltc_asn1_list *pub, enum ltc_pka_id *pka)
 {
    der_flexi_check flexi_should[4];
    ltc_asn1_list *seqid, *id = NULL;
@@ -17,7 +17,7 @@ int x509_get_pka(ltc_asn1_list *pub, enum ltc_pka_id *pka)
    int err;
    unsigned long n = 0;
    LTC_SET_DER_FLEXI_CHECK(flexi_should, n++, LTC_ASN1_SEQUENCE, &seqid);
-   LTC_SET_DER_FLEXI_CHECK(flexi_should, n++, LTC_ASN1_BIT_STRING, NULL);
+   LTC_SET_DER_FLEXI_CHECK_OPT(flexi_should, n++, LTC_ASN1_BIT_STRING, NULL);
    LTC_SET_DER_FLEXI_CHECK(flexi_should, n, LTC_ASN1_EOL, NULL);
    if ((err = der_flexi_sequence_cmp(pub, flexi_should)) != CRYPT_OK) {
       return err;
