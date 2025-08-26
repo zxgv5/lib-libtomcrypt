@@ -750,6 +750,22 @@ int pk_oid_cmp_with_asn1(const char *o1, const ltc_asn1_list *o2);
 
 /* tomcrypt_pkcs.h */
 
+#ifdef LTC_PKCS_1
+
+int pkcs_1_pss_encode_mgf1(const unsigned char *msghash,       unsigned long  msghashlen,
+                                 unsigned long saltlen,
+                                 prng_state    *prng,                    int  prng_idx,
+                                 int           hash_idx,                 int  mgf_hash_idx,
+                                 unsigned long modulus_bitlen,
+                                 unsigned char *out,           unsigned long *outlen);
+int pkcs_1_pss_decode_mgf1(const unsigned char *msghash, unsigned long msghashlen,
+                           const unsigned char *sig,     unsigned long siglen,
+                                 unsigned long saltlen,
+                                          int  hash_idx,           int mgf_hash_idx,
+                                 unsigned long modulus_bitlen,     int *res);
+
+#endif /* LTC_PKCS_1 */
+
 #ifdef LTC_PKCS_8
 
 /* Public-Key Cryptography Standards (PKCS) #8:
