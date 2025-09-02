@@ -24,7 +24,7 @@
 int x509_process_public_key_from_spki(const unsigned char *in, unsigned long inlen,
                                       enum ltc_oid_id algorithm, ltc_asn1_type param_type,
                                       ltc_asn1_list* parameters, unsigned long *parameters_len,
-                                      public_key_decode_cb callback, void *ctx)
+                                      public_key_decode_cb callback, void *key)
 {
    int err;
    unsigned char *tmpbuf = NULL;
@@ -34,7 +34,7 @@ int x509_process_public_key_from_spki(const unsigned char *in, unsigned long inl
    LTC_ARGCHK(callback  != NULL);
 
    if (algorithm == LTC_OID_EC) {
-      err = callback(in, inlen, ctx);
+      err = callback(in, inlen, key);
    } else {
 
       tmpbuf_len = inlen;
@@ -47,7 +47,7 @@ int x509_process_public_key_from_spki(const unsigned char *in, unsigned long inl
                                                 algorithm, tmpbuf, &tmpbuf_len,
                                                 param_type, parameters, parameters_len);
       if (err == CRYPT_OK) {
-         err = callback(tmpbuf, tmpbuf_len, ctx);
+         err = callback(tmpbuf, tmpbuf_len, key);
       }
    }
 
@@ -73,7 +73,7 @@ int x509_process_public_key_from_spki(const unsigned char *in, unsigned long inl
 int x509_decode_public_key_from_certificate(const unsigned char *in, unsigned long inlen,
                                             enum ltc_oid_id algorithm, ltc_asn1_type param_type,
                                             ltc_asn1_list* parameters, unsigned long *parameters_len,
-                                            public_key_decode_cb callback, void *ctx)
+                                            public_key_decode_cb callback, void *key)
 {
    int err;
    ltc_asn1_list *decoded_list;
@@ -90,7 +90,7 @@ int x509_decode_public_key_from_certificate(const unsigned char *in, unsigned lo
    err = x509_process_public_key_from_spki(spki->data, spki->size,
                                            algorithm, param_type,
                                            parameters, parameters_len,
-                                           callback, ctx);
+                                           callback, key);
 
    if (decoded_list) der_free_sequence_flexi(decoded_list);
 
