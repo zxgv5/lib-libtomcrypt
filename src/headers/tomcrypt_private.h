@@ -458,6 +458,8 @@ int rsa_make_key_bn_e(prng_state *prng, int wprng, int size, void *e,
                       rsa_key *key); /* used by op-tee */
 int rsa_import_pkcs1(const unsigned char *in, unsigned long inlen, rsa_key *key);
 int rsa_import_pkcs8_asn1(ltc_asn1_list *alg_id, ltc_asn1_list *priv_key, rsa_key *key);
+int rsa_import_spki(const unsigned char *in, unsigned long inlen, rsa_key *key);
+int rsa_decode_parameters(const ltc_asn1_list *parameters, ltc_rsa_parameters *rsa_params);
 #endif /* LTC_MRSA */
 
 /* ---- DH Routines ---- */
@@ -617,8 +619,8 @@ int dsa_int_validate(const dsa_key *key, int *stat);
 int dsa_int_validate_xy(const dsa_key *key, int *stat);
 int dsa_int_validate_pqg(const dsa_key *key, int *stat);
 int dsa_int_validate_primes(const dsa_key *key, int *stat);
-int dsa_import_pkcs1(const unsigned char *in, unsigned long inlen, dsa_key *key);
 int dsa_import_pkcs8_asn1(ltc_asn1_list *alg_id, ltc_asn1_list *priv_key, dsa_key *key);
+int dsa_import_spki(const unsigned char *in, unsigned long inlen, dsa_key *key);
 #endif /* LTC_MDSA */
 
 
@@ -733,17 +735,17 @@ int der_teletex_value_decode(int v);
 
 int der_utf8_valid_char(const wchar_t c);
 
-typedef int (*public_key_decode_cb)(const unsigned char *in, unsigned long inlen, void *ctx);
+typedef int (*public_key_decode_cb)(const unsigned char *in, unsigned long inlen, void *key);
 
 int x509_decode_public_key_from_certificate(const unsigned char *in, unsigned long inlen,
                                             enum ltc_oid_id algorithm, ltc_asn1_type param_type,
                                             ltc_asn1_list* parameters, unsigned long *parameters_len,
-                                            public_key_decode_cb callback, void *ctx);
+                                            public_key_decode_cb callback, void *key);
 int x509_decode_spki(const unsigned char *in, unsigned long inlen, ltc_asn1_list **out, const ltc_asn1_list **spki);
 int x509_process_public_key_from_spki(const unsigned char *in, unsigned long inlen,
                                       enum ltc_oid_id algorithm, ltc_asn1_type param_type,
                                       ltc_asn1_list* parameters, unsigned long *parameters_len,
-                                      public_key_decode_cb callback, void *ctx);
+                                      public_key_decode_cb callback, void *key);
 
 /* SUBJECT PUBLIC KEY INFO */
 int x509_encode_subject_public_key_info(unsigned char *out, unsigned long *outlen,
