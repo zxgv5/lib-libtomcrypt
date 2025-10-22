@@ -134,7 +134,7 @@ static const char *hex_key[] = {
      "DCCC27C8E4DC6248D59BAFF5AB60F621FD53E2B75D09C91AA104A9FC612C5D04583A5A39F14A215667FDCC20A38F78185A793D2E8E7E860AE6A833C104174A9F" };
 
 /*** openssl public RSA key in DER format */
-static const unsigned char openssl_public_rsa[] = {
+const unsigned char ltc_openssl_public_rsa[] = {
    0x30, 0x81, 0x9f, 0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01,
    0x05, 0x00, 0x03, 0x81, 0x8d, 0x00, 0x30, 0x81, 0x89, 0x02, 0x81, 0x81, 0x00, 0xcf, 0x9a, 0xde,
    0x64, 0x8a, 0xda, 0xc8, 0x33, 0x20, 0xa9, 0xd7, 0x83, 0x31, 0x19, 0x54, 0xb2, 0x9a, 0x85, 0xa7,
@@ -146,6 +146,7 @@ static const unsigned char openssl_public_rsa[] = {
    0xe2, 0x76, 0x0c, 0xc9, 0x63, 0x6c, 0x49, 0x58, 0x93, 0xed, 0xcc, 0xaa, 0xdc, 0x25, 0x3b, 0x0a,
    0x60, 0x3f, 0x8b, 0x54, 0x3a, 0xc3, 0x4d, 0x31, 0xe7, 0x94, 0xa4, 0x44, 0xfd, 0x02, 0x03, 0x01,
    0x00, 0x01,  };
+const unsigned long ltc_openssl_public_rsa_sz = sizeof(ltc_openssl_public_rsa);
 
 /* same key but with extra headers stripped */
 static const unsigned char openssl_public_rsa_stripped[] = {
@@ -184,22 +185,24 @@ static int rsa_compat_test(void)
    int stat, i;
    unsigned char buf[1024], key_parts[8][128];
    unsigned long len, key_lens[8];
+   ltc_rsa_op_parameters rsa_params = {0};
 
    /* try reading the key */
    DO(rsa_import(ltc_rsa_private_test_key, sizeof(ltc_rsa_private_test_key), &key));
-   DO(rsa_import(openssl_public_rsa, sizeof(openssl_public_rsa), &pubkey));
+   DO(rsa_import(ltc_openssl_public_rsa, sizeof(ltc_openssl_public_rsa), &pubkey));
 
    /* sign-verify a message with PKCS #1 v1.5 no ASN.1 */
    len = sizeof(buf);
-   DO(rsa_sign_hash_ex((unsigned char*)"test", 4, buf, &len, LTC_PKCS_1_V1_5_NA1, NULL, 0, 0, 0, 0, &key));
+   rsa_params.padding = LTC_PKCS_1_V1_5_NA1;
+   DO(rsa_sign_hash_v2((unsigned char*)"test", 4, buf, &len, &rsa_params, &key));
    if (len != sizeof(openssl_rsautl_pkcs) || memcmp(buf, openssl_rsautl_pkcs, len)) {
-      fprintf(stderr, "RSA rsa_sign_hash_ex + LTC_PKCS_1_V1_5_NA1 failed\n");
+      fprintf(stderr, "RSA rsa_sign_hash_v2 + LTC_PKCS_1_V1_5_NA1 failed\n");
       return 1;
    }
    stat = 0;
-   DO(rsa_verify_hash_ex(openssl_rsautl_pkcs, sizeof(openssl_rsautl_pkcs), (unsigned char*)"test", 4, LTC_PKCS_1_V1_5_NA1, 0, 0, 0, &stat, &pubkey));
+   DO(rsa_verify_hash_v2(openssl_rsautl_pkcs, sizeof(openssl_rsautl_pkcs), (unsigned char*)"test", 4, &rsa_params, &stat, &pubkey));
    if (stat != 1) {
-      fprintf(stderr, "RSA rsa_verify_hash_ex + LTC_PKCS_1_V1_5_NA1 failed\n");
+      fprintf(stderr, "RSA rsa_verify_hash_v2 + LTC_PKCS_1_V1_5_NA1 failed\n");
       return 1;
    }
    rsa_free(&pubkey);
@@ -222,7 +225,7 @@ static int rsa_compat_test(void)
    rsa_free(&key);
 
    /* try reading the public key */
-   DO(rsa_import(openssl_public_rsa, sizeof(openssl_public_rsa), &key));
+   DO(rsa_import(ltc_openssl_public_rsa, sizeof(ltc_openssl_public_rsa), &key));
    len = sizeof(buf);
    DO(rsa_export(buf, &len, PK_PUBLIC, &key));
    COMPARE_TESTVECTOR(buf, len, openssl_public_rsa_stripped, sizeof(openssl_public_rsa_stripped), "RSA public export (from OpenSSL)", 0);
@@ -257,10 +260,10 @@ static int rsa_compat_test(void)
    rsa_free(&key);
 
    /* try export in SubjectPublicKeyInfo format of the public key */
-   DO(rsa_import(openssl_public_rsa, sizeof(openssl_public_rsa), &key));
+   DO(rsa_import(ltc_openssl_public_rsa, sizeof(ltc_openssl_public_rsa), &key));
    len = sizeof(buf);
    DO(rsa_export(buf, &len, PK_PUBLIC | PK_STD, &key));
-   COMPARE_TESTVECTOR(buf, len, openssl_public_rsa, sizeof(openssl_public_rsa),  "RSA public export (X.509)", 0);
+   COMPARE_TESTVECTOR(buf, len, ltc_openssl_public_rsa, sizeof(ltc_openssl_public_rsa),  "RSA public export (X.509)", 0);
    rsa_free(&key);
 
    return 0;
@@ -319,6 +322,7 @@ static int s_rsa_cryptx_issue_69(void)
    unsigned char buf0[512], buf1[512];
    unsigned long l0, l1;
    int stat;
+   ltc_rsa_op_parameters rsa_params = {0};
 
    l0 = sizeof(buf0);
    l1 = sizeof(buf1);
@@ -331,9 +335,10 @@ static int s_rsa_cryptx_issue_69(void)
    l1 = sizeof(buf1);
    DO(radix_to_bin(sig1, 16, buf0, &l0));
    DO(radix_to_bin(hash, 16, buf1, &l1));
-   SHOULD_FAIL(rsa_verify_hash_ex(buf0, l0, buf1, l1, LTC_PKCS_1_V1_5, 0, 0, 0, &stat, &key));
+   rsa_params.padding = LTC_PKCS_1_V1_5;
+   SHOULD_FAIL(rsa_verify_hash_v2(buf0, l0, buf1, l1, &rsa_params, &stat, &key));
    DO(radix_to_bin(sig2, 16, buf0, &l0));
-   SHOULD_FAIL(rsa_verify_hash_ex(buf0, l0, buf1, l1, LTC_PKCS_1_V1_5, 0, 0, 0, &stat, &key));
+   SHOULD_FAIL(rsa_verify_hash_v2(buf0, l0, buf1, l1, &rsa_params, &stat, &key));
    rsa_free(&key);
    return CRYPT_OK;
 }
@@ -448,17 +453,81 @@ static int s_rsa_import_pkcs8(const void *in, unsigned long inlen, void *key)
 #endif
 #endif
 
+static int s_rsa_macros_test(void)
+{
+   rsa_key key, pubkey;
+   int stat;
+   const unsigned char tv[] = "test";
+   unsigned char buf0[1024], buf1[1024];
+   unsigned long buf0len, buf1len;
+
+   DO(rsa_import(ltc_rsa_private_test_key, sizeof(ltc_rsa_private_test_key), &key));
+   DO(rsa_import(ltc_openssl_public_rsa, sizeof(ltc_openssl_public_rsa), &pubkey));
+
+   buf0len = sizeof(buf0);
+   DO(ltc_rsa_sign_hash(tv, 4, buf0, &buf0len, &yarrow_prng, find_prng("yarrow"), find_hash("sha1"), 8, &key));
+   buf1len = sizeof(buf1);
+   DO(ltc_rsa_verify_hash(buf0, buf0len, tv, 4, find_hash("sha1"), 8, &stat, &key));
+   ENSURE(stat == 1);
+
+   buf0len = sizeof(buf0);
+   DO(ltc_rsa_encrypt_key(tv, 4, buf0, &buf0len, NULL, 0, &yarrow_prng, find_prng("yarrow"), find_hash("sha1"), &pubkey));
+   buf1len = sizeof(buf1);
+   DO(ltc_rsa_decrypt_key(buf0, buf0len, buf1, &buf1len, NULL, 0, find_hash("sha1"), &stat, &key));
+   ENSURE(stat == 1);
+   COMPARE_TESTVECTOR(buf1, buf1len, tv, 4, "s_rsa_macros_test", 0);
+
+   rsa_free(&pubkey);
+   rsa_free(&key);
+
+   return CRYPT_OK;
+}
+
+static int s_rsa_pss_test(void)
+{
+   rsa_key key;
+   const unsigned char tv[] = "test";
+   unsigned char buf0[1024];
+   unsigned long buf0len;
+   ltc_rsa_op_parameters rsa_oparams = {
+     .prng = &yarrow_prng,
+     .wprng = find_prng("yarrow"),
+     .padding = LTC_PKCS_1_OAEP,
+     .u.crypt.lparam = tv,
+     .u.crypt.lparamlen = (unsigned long)4,
+     .params.hash_alg = "sha1",
+     .params.mgf1_hash_alg = "sha256",
+     .params.saltlen = 7,
+   };
+
+   DO(rsa_import(ltc_rsa_private_test_key, sizeof(ltc_rsa_private_test_key), &key));
+
+   buf0len = sizeof(buf0);
+   DO(rsa_encrypt_key_v2(tv, 4, buf0, &buf0len, &rsa_oparams, &key));
+   DO(rsa_encrypt_key_v2(tv, 4, buf0, &buf0len, &rsa_oparams, &key));
+   key.params = rsa_oparams.params;
+   DO(rsa_encrypt_key_v2(tv, 4, buf0, &buf0len, &rsa_oparams, &key));
+   /* If the key is a PSS key, we must do a PSS operation */
+   rsa_oparams.padding = LTC_PKCS_1_V1_5;
+   SHOULD_FAIL(rsa_encrypt_key_v2(tv, 4, buf0, &buf0len, &rsa_oparams, &key));
+
+   rsa_free(&key);
+
+   return CRYPT_OK;
+}
+
 int rsa_test(void)
 {
    unsigned char in[1024], out[1024], tmp[3072];
    rsa_key       key, privKey, pubKey;
-   int           hash_idx, prng_idx, stat, stat2, i, mgf_hash, label_hash;
-   unsigned long rsa_msgsize, len, len2, len3, cnt, cnt2, max_msgsize;
+   int           prng_idx, stat, stat2, i, mgf_hash;
+   unsigned long rsa_msgsize, len, len2, len3, cnt, cnt2, max_msgsize, label_hash;
    static unsigned char lparam[] = { 0x01, 0x02, 0x03, 0x04 };
    void* dP;
    unsigned char* p;
    unsigned char* p2;
    unsigned char* p3;
+   ltc_rsa_op_parameters rsa_params = {0};
 
    if (ltc_mp.name == NULL) return CRYPT_NOP;
 
@@ -466,12 +535,15 @@ int rsa_test(void)
       return 1;
    }
 
-   hash_idx = find_hash("sha1");
-   prng_idx = find_prng("yarrow");
-   if (hash_idx == -1 || prng_idx == -1) {
+   rsa_params.params.hash_alg = "sha1";
+   rsa_params.wprng = find_prng("yarrow");
+   mgf_hash = find_hash(rsa_params.params.hash_alg);
+   if (mgf_hash == -1 || rsa_params.wprng == -1) {
       fprintf(stderr, "rsa_test requires LTC_SHA1 and yarrow");
       return 1;
    }
+   rsa_params.prng = &yarrow_prng;
+   prng_idx = rsa_params.wprng;
 
 #ifdef LTC_TEST_READDIR
    DO(test_process_dir("tests/rsa", &key, s_rsa_import_x509, NULL, (dir_cleanup_cb)rsa_free, "rsa_test"));
@@ -481,6 +553,8 @@ int rsa_test(void)
    DO(test_process_dir("tests/rsa-pkcs8", &key, s_rsa_import_pkcs8, NULL, (dir_cleanup_cb)rsa_free, "rsa_pkcs8_test"));
 #endif
 
+   DO(s_rsa_pss_test());
+   DO(s_rsa_macros_test());
    DO(s_rsa_cryptx_issue_69());
    DO(s_rsa_issue_301(prng_idx));
    DO(s_rsa_public_ubin_e(prng_idx));
@@ -512,13 +586,13 @@ print_hex("q", tmp, len);
    /* make a random key/msg */
    ENSURE(yarrow_read(in, 117, &yarrow_prng) == 117);
 
+   rsa_params.padding = LTC_PKCS_1_OAEP;
 #ifdef LTC_TEST_EXT
    for (mgf_hash = 0; mgf_hash < TAB_SIZE; ++mgf_hash) {
       if (hash_is_valid(mgf_hash) != CRYPT_OK)
          continue;
 #else
    {
-      mgf_hash = hash_idx;
 #endif
       for (label_hash = 0; label_hash < TAB_SIZE; ++label_hash) {
          if (hash_is_valid(label_hash) != CRYPT_OK)
@@ -526,6 +600,8 @@ print_hex("q", tmp, len);
          if (2 * hash_descriptor[label_hash].hashsize > 126)
             continue;
          max_msgsize = 128 - (2 * hash_descriptor[label_hash].hashsize) - 2;
+         rsa_params.params.hash_alg = hash_descriptor[label_hash].name;
+         rsa_params.params.mgf1_hash_alg = hash_descriptor[mgf_hash].name;
 
 #if defined(LTC_TEST_DBG) && LTC_TEST_DBG > 1
          fprintf(stderr, "Test MGF(%s), Labelhash(%s) with max_msgsize %lu\n", hash_descriptor[mgf_hash].name, hash_descriptor[label_hash].name, max_msgsize);
@@ -536,59 +612,66 @@ print_hex("q", tmp, len);
             len  = sizeof(out);
             len2 = rsa_msgsize;
 
-            DO(rsa_encrypt_key_ex(in, rsa_msgsize, out, &len, NULL, 0, &yarrow_prng, prng_idx, mgf_hash, label_hash, LTC_PKCS_1_OAEP, &key));
+            DO(rsa_encrypt_key_v2(in, rsa_msgsize, out, &len, &rsa_params, &key));
             /* change a byte */
             out[8] ^= 1;
-            SHOULD_FAIL(rsa_decrypt_key_ex(out, len, tmp, &len2, NULL, 0, mgf_hash, label_hash, LTC_PKCS_1_OAEP, &stat2, &key));
+            SHOULD_FAIL(rsa_decrypt_key_v2(out, len, tmp, &len2, &rsa_params, &stat2, &key));
             /* change a byte back */
             out[8] ^= 1;
             ENSURE(len2 == rsa_msgsize);
 
             len2 = rsa_msgsize;
-            DO(rsa_decrypt_key_ex(out, len, tmp, &len2, NULL, 0, mgf_hash, label_hash, LTC_PKCS_1_OAEP, &stat, &key));
+            DO(rsa_decrypt_key_v2(out, len, tmp, &len2, &rsa_params, &stat, &key));
             ENSUREX(stat == 1 && stat2 == 0, "rsa_decrypt_key (without lparam)");
             COMPARE_TESTVECTOR(tmp, len2, in, rsa_msgsize,  "rsa_decrypt_key (without lparam)", cnt << 8 | rsa_msgsize);
          }
 
          /* encrypt the key (with lparam) */
+         rsa_params.u.crypt.lparam = lparam;
+         rsa_params.u.crypt.lparamlen = sizeof(lparam);
          for (rsa_msgsize = 0; rsa_msgsize <= max_msgsize; rsa_msgsize++) {
             len  = sizeof(out);
             len2 = rsa_msgsize;
-            DO(rsa_encrypt_key_ex(rsa_msgsize ? in : NULL, rsa_msgsize, out, &len, lparam, sizeof(lparam), &yarrow_prng, prng_idx, mgf_hash, label_hash, LTC_PKCS_1_OAEP, &key));
+            DO(rsa_encrypt_key_v2(rsa_msgsize ? in : NULL, rsa_msgsize, out, &len, &rsa_params, &key));
             /* change a byte */
             out[8] ^= 1;
-            SHOULD_FAIL(rsa_decrypt_key_ex(out, len, tmp, &len2, lparam, sizeof(lparam), mgf_hash, label_hash, LTC_PKCS_1_OAEP, &stat2, &key));
+            SHOULD_FAIL(rsa_decrypt_key_v2(out, len, tmp, &len2, &rsa_params, &stat2, &key));
             ENSURE(len2 == rsa_msgsize);
 
             /* change a byte back */
             out[8] ^= 1;
 
             len2 = rsa_msgsize;
-            DO(rsa_decrypt_key_ex(out, len, tmp, &len2, lparam, sizeof(lparam), mgf_hash, label_hash, LTC_PKCS_1_OAEP, &stat, &key));
+            DO(rsa_decrypt_key_v2(out, len, tmp, &len2, &rsa_params, &stat, &key));
             ENSURE(stat == 1 && stat2 == 0);
             COMPARE_TESTVECTOR(tmp, len2, in, rsa_msgsize,  "rsa_decrypt_key (with lparam)", rsa_msgsize);
          }
+         rsa_params.u.crypt.lparam = NULL;
+         rsa_params.u.crypt.lparamlen = 0;
 
       }
    }
-
+   rsa_params.params.hash_alg = "sha1";
+   rsa_params.params.mgf1_hash_alg = "sha1";
 
 
    /* encrypt the key PKCS #1 v1.5 (payload from 1 to 117 bytes) */
+   rsa_params.padding = LTC_PKCS_1_V1_5;
    for (rsa_msgsize = 0; rsa_msgsize <= 117; rsa_msgsize++) {
       len  = sizeof(out);
       len2 = rsa_msgsize;
-      DO(rsa_encrypt_key_ex(in, rsa_msgsize, out, &len, NULL, 0, &yarrow_prng, prng_idx, 0, -1, LTC_PKCS_1_V1_5, &key));
+      DO(rsa_encrypt_key_v2(in, rsa_msgsize, out, &len, &rsa_params, &key));
 
       len2 = rsa_msgsize;
-      DO(rsa_decrypt_key_ex(out, len, tmp, &len2, NULL, 0, 0, -1, LTC_PKCS_1_V1_5, &stat, &key));
+      DO(rsa_decrypt_key_v2(out, len, tmp, &len2, &rsa_params, &stat, &key));
       ENSURE(stat == 1);
       COMPARE_TESTVECTOR(tmp, len2, in, rsa_msgsize,  "rsa_decrypt_key_ex", rsa_msgsize);
    }
 
    /* sign a message (unsalted, lower cholestorol and Atkins approved) now */
    len = sizeof(out);
-   DO(rsa_sign_hash(in, 20, out, &len, &yarrow_prng, prng_idx, hash_idx, 0, &key));
+   rsa_params.padding = LTC_PKCS_1_PSS;
+   DO(rsa_sign_hash_v2(in, 20, out, &len, &rsa_params, &key));
 
 /* export key and import as both private and public */
    len2 = sizeof(tmp);
@@ -607,20 +690,20 @@ print_hex("q", tmp, len);
    dbg_malloc_stats();
 
    /* verify with original */
-   DO(rsa_verify_hash(out, len, in, 20, hash_idx, 0, &stat, &key));
+   DO(rsa_verify_hash_v2(out, len, in, 20, &rsa_params, &stat, &key));
    /* change a byte */
    in[0] ^= 1;
-   DO(rsa_verify_hash(out, len, in, 20, hash_idx, 0, &stat2, &key));
+   DO(rsa_verify_hash_v2(out, len, in, 20, &rsa_params, &stat2, &key));
 
    ENSUREX(stat == 1 && stat2 == 0, "rsa_verify_hash (unsalted, origKey) failed");
 
    /* verify with privKey */
    /* change byte back to original */
    in[0] ^= 1;
-   DO(rsa_verify_hash(out, len, in, 20, hash_idx, 0, &stat, &privKey));
+   DO(rsa_verify_hash_v2(out, len, in, 20, &rsa_params, &stat, &privKey));
    /* change a byte */
    in[0] ^= 1;
-   DO(rsa_verify_hash(out, len, in, 20, hash_idx, 0, &stat2, &privKey));
+   DO(rsa_verify_hash_v2(out, len, in, 20, &rsa_params, &stat2, &privKey));
 
    if (!(stat == 1 && stat2 == 0)) {
       fprintf(stderr, "rsa_verify_hash (unsalted, privKey) failed, %d, %d", stat, stat2);
@@ -636,10 +719,10 @@ print_hex("q", tmp, len);
    privKey.dP = NULL;
    /* change byte back to original */
    in[0] ^= 1;
-   DO(rsa_verify_hash(out, len, in, 20, hash_idx, 0, &stat, &privKey));
+   DO(rsa_verify_hash_v2(out, len, in, 20, &rsa_params, &stat, &privKey));
    /* change a byte */
    in[0] ^= 1;
-   DO(rsa_verify_hash(out, len, in, 20, hash_idx, 0, &stat2, &privKey));
+   DO(rsa_verify_hash_v2(out, len, in, 20, &rsa_params, &stat2, &privKey));
 
    if (!(stat == 1 && stat2 == 0)) {
       fprintf(stderr, "rsa_verify_hash (unsalted, privKey) failed, %d, %d", stat, stat2);
@@ -653,10 +736,10 @@ print_hex("q", tmp, len);
    /* verify with pubKey */
    /* change byte back to original */
    in[0] ^= 1;
-   DO(rsa_verify_hash(out, len, in, 20, hash_idx, 0, &stat, &pubKey));
+   DO(rsa_verify_hash_v2(out, len, in, 20, &rsa_params, &stat, &pubKey));
    /* change a byte */
    in[0] ^= 1;
-   DO(rsa_verify_hash(out, len, in, 20, hash_idx, 0, &stat2, &pubKey));
+   DO(rsa_verify_hash_v2(out, len, in, 20, &rsa_params, &stat2, &pubKey));
 
    if (!(stat == 1 && stat2 == 0)) {
       fprintf(stderr, "rsa_verify_hash (unsalted, pubkey) failed, %d, %d", stat, stat2);
@@ -668,11 +751,12 @@ print_hex("q", tmp, len);
 
    /* sign a message (salted) now (use privKey to make, pubKey to verify) */
    len = sizeof(out);
-   DO(rsa_sign_hash(in, 20, out, &len, &yarrow_prng, prng_idx, hash_idx, 8, &privKey));
-   DO(rsa_verify_hash(out, len, in, 20, hash_idx, 8, &stat, &pubKey));
+   rsa_params.params.saltlen = 8;
+   DO(rsa_sign_hash_v2(in, 20, out, &len, &rsa_params, &privKey));
+   DO(rsa_verify_hash_v2(out, len, in, 20, &rsa_params, &stat, &pubKey));
    /* change a byte */
    in[0] ^= 1;
-   DO(rsa_verify_hash(out, len, in, 20, hash_idx, 8, &stat2, &pubKey));
+   DO(rsa_verify_hash_v2(out, len, in, 20, &rsa_params, &stat2, &pubKey));
 
    if (!(stat == 1 && stat2 == 0)) {
       fprintf(stderr, "rsa_verify_hash (salted) failed, %d, %d", stat, stat2);
@@ -681,17 +765,19 @@ print_hex("q", tmp, len);
       rsa_free(&privKey);
       return 1;
    }
+   rsa_params.params.saltlen = 0;
 
    /* sign a message with PKCS #1 v1.5 */
    len = sizeof(out);
-   DO(rsa_sign_hash_ex(in, 20, out, &len, LTC_PKCS_1_V1_5, &yarrow_prng, prng_idx, hash_idx, 0, 8, &privKey));
-   DO(rsa_verify_hash_ex(out, len, in, 20, LTC_PKCS_1_V1_5, hash_idx, 0, 8, &stat, &pubKey));
+   rsa_params.padding = LTC_PKCS_1_V1_5;
+   DO(rsa_sign_hash_v2(in, 20, out, &len, &rsa_params, &privKey));
+   DO(rsa_verify_hash_v2(out, len, in, 20, &rsa_params, &stat, &pubKey));
    /* change a byte */
    in[0] ^= 1;
-   DO(rsa_verify_hash_ex(out, len, in, 20, LTC_PKCS_1_V1_5, hash_idx, 0, 8, &stat2, &pubKey));
+   DO(rsa_verify_hash_v2(out, len, in, 20, &rsa_params, &stat2, &pubKey));
 
    if (!(stat == 1 && stat2 == 0)) {
-      fprintf(stderr, "rsa_verify_hash_ex failed, %d, %d", stat, stat2);
+      fprintf(stderr, "rsa_verify_hash_v2 failed, %d, %d", stat, stat2);
       rsa_free(&key);
       rsa_free(&pubKey);
       rsa_free(&privKey);
@@ -717,14 +803,14 @@ print_hex("q", tmp, len);
    p = in;
    p2 = out;
    p3 = tmp;
-   for (i = 0; i < 9; ++i) {
+   for (i = 0; i < 10; ++i) {
      len = sizeof(in);
      len2 = sizeof(out);
      /* (1) */
-     DO(rsa_sign_hash_ex(p, 20, p2, &len2, LTC_PKCS_1_V1_5, &yarrow_prng, prng_idx, hash_idx, 0, 8, &privKey));
+     DO(rsa_sign_hash_v2(p, 20, p2, &len2, &rsa_params, &privKey));
      /* (2) */
-     DOX(rsa_verify_hash_ex(p2, len2, p, 20, LTC_PKCS_1_V1_5, hash_idx, 0, -1, &stat, &pubKey), "should succeed");
-     DOX(stat == 1?CRYPT_OK:CRYPT_FAIL_TESTVECTOR, "should succeed");
+     DOX(rsa_verify_hash_v2(p2, len2, p, 20, &rsa_params, &stat, &pubKey), "should succeed");
+     ENSURE(stat == 1);
      len3 = sizeof(tmp);
      /* (3) */
      DO(ltc_mp.rsa_me(p2, len2, p3, &len3, PK_PUBLIC, &key));
@@ -757,8 +843,11 @@ print_hex("q", tmp, len);
 
      len3 = sizeof(tmp);
      /* (6) */
-     SHOULD_FAIL(rsa_verify_hash_ex(p2, len2, p, 20, LTC_PKCS_1_V1_5, hash_idx, -1, -1, &stat, &pubKey));
-     DOX(stat == 0?CRYPT_OK:CRYPT_FAIL_TESTVECTOR, "should fail");
+     if (i < 8)
+        SHOULD_FAIL(rsa_verify_hash_v2(p2, len2, p, 20, &rsa_params, &stat, &pubKey));
+     else
+        DO(rsa_verify_hash_v2(p2, len2, p, 20, &rsa_params, &stat, &pubKey));
+     ENSURE(stat == 0);
    }
    rsa_free(&key);
 

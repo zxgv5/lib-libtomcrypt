@@ -11,15 +11,17 @@
 int pkcs_1_oaep_test(void)
 {
   struct ltc_prng_descriptor* no_prng_desc = no_prng_desc_get();
-  int prng_idx = register_prng(no_prng_desc);
-  int hash_idx = find_hash("sha1");
-  unsigned int i;
-  unsigned int j;
+  ltc_rsa_op_parameters rsa_params = {
+                                      .wprng = register_prng(no_prng_desc),
+                                      .prng = (void*)no_prng_desc,
+                                      .params.hash_alg = "sha1",
+                                      .params.mgf1_hash_alg = "sha1",
+                                      .padding = LTC_PKCS_1_OAEP
+  };
+  unsigned int i, j;
 
   if (ltc_mp.name == NULL) return CRYPT_NOP;
 
-  DO(prng_is_valid(prng_idx));
-  DO(hash_is_valid(hash_idx));
 
   for (i = 0; i < LTC_ARRAY_SIZE(testcases_oaep); ++i) {
     testcase_t* t = &testcases_oaep[i];
@@ -41,11 +43,11 @@ int pkcs_1_oaep_test(void)
         unsigned char buf[256], obuf[256];
         unsigned long buflen = sizeof(buf), obuflen = sizeof(obuf);
         int stat;
-        prng_descriptor[prng_idx].add_entropy(s->o2, s->o2_l, (void*)no_prng_desc);
-        DOX(rsa_encrypt_key(s->o1, s->o1_l, obuf, &obuflen, NULL, 0, (void*)no_prng_desc, prng_idx, hash_idx, key), s->name);
+        prng_descriptor[rsa_params.wprng].add_entropy(s->o2, s->o2_l, rsa_params.prng);
+        DOX(rsa_encrypt_key_v2(s->o1, s->o1_l, obuf, &obuflen, &rsa_params, key), s->name);
         COMPARE_TESTVECTOR(obuf, obuflen, s->o3, s->o3_l,s->name, j);
-        DOX(rsa_decrypt_key(obuf, obuflen, buf, &buflen, NULL, 0, hash_idx, &stat, key), s->name);
-        DOX(stat == 1?CRYPT_OK:CRYPT_FAIL_TESTVECTOR, s->name);
+        DOX(rsa_decrypt_key_v2(obuf, obuflen, buf, &buflen, &rsa_params, &stat, key), s->name);
+        ENSUREX(stat == 1, s->name);
     } /* for */
 
     ltc_mp_deinit_multi(key->d,  key->e, key->N, key->dQ, key->dP, key->qP, key->p, key->q, LTC_NULL);

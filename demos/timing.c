@@ -702,11 +702,21 @@ static void time_rsa(void)
    unsigned char buf[2][2048] = { 0 };
    unsigned long x, y, z, zzz;
    int           err, zz, stat;
+   ltc_rsa_op_parameters rsa_params = {
+      .u.crypt.lparam = (const unsigned char *)"testprog",
+      .u.crypt.lparamlen = 8,
+      .prng = &yarrow_prng,
+      .wprng = find_prng("yarrow"),
+      .params.hash_alg = "sha1",
+      .params.mgf1_hash_alg = "sha1",
+      .params.saltlen = 8,
+   };
 
    if (ltc_mp.name == NULL) return;
 
    for (x = 2048; x <= 8192; x <<= 1) {
        t2 = 0;
+       rsa_params.padding = LTC_PKCS_1_OAEP;
        for (y = 0; y < 4; y++) {
            t_start();
            t1 = t_read();
@@ -734,9 +744,7 @@ static void time_rsa(void)
            t_start();
            t1 = t_read();
            z = sizeof(buf[1]);
-           if ((err = rsa_encrypt_key(buf[0], 32, buf[1], &z, (const unsigned char *)"testprog", 8, &yarrow_prng,
-                                      find_prng("yarrow"), find_hash("sha1"),
-                                      &key)) != CRYPT_OK) {
+           if ((err = rsa_encrypt_key_v2(buf[0], 32, buf[1], &z, &rsa_params, &key)) != CRYPT_OK) {
               fprintf(stderr, "\n\nrsa_encrypt_key says %s, wait...no it should say %s...damn you!\n", error_to_string(err), error_to_string(CRYPT_OK));
               exit(EXIT_FAILURE);
            }
@@ -755,8 +763,7 @@ static void time_rsa(void)
            t_start();
            t1 = t_read();
            zzz = sizeof(buf[0]);
-           if ((err = rsa_decrypt_key(buf[1], z, buf[0], &zzz, (const unsigned char *)"testprog", 8,  find_hash("sha1"),
-                                      &zz, &key)) != CRYPT_OK) {
+           if ((err = rsa_decrypt_key_v2(buf[1], z, buf[0], &zzz, &rsa_params, &zz, &key)) != CRYPT_OK) {
               fprintf(stderr, "\n\nrsa_decrypt_key says %s, wait...no it should say %s...damn you!\n", error_to_string(err), error_to_string(CRYPT_OK));
               exit(EXIT_FAILURE);
            }
@@ -771,12 +778,12 @@ static void time_rsa(void)
        fprintf(stderr, "RSA-%lu decrypt_key took %15"PRI64"u cycles\n", x, t2);
 
        t2 = 0;
+       rsa_params.padding = LTC_PKCS_1_PSS;
        for (y = 0; y < 256; y++) {
           t_start();
           t1 = t_read();
           z = sizeof(buf[1]);
-          if ((err = rsa_sign_hash(buf[0], 20, buf[1], &z, &yarrow_prng,
-                                   find_prng("yarrow"), find_hash("sha1"), 8, &key)) != CRYPT_OK) {
+          if ((err = rsa_sign_hash_v2(buf[0], 20, buf[1], &z, &rsa_params, &key)) != CRYPT_OK) {
               fprintf(stderr, "\n\nrsa_sign_hash says %s, wait...no it should say %s...damn you!\n", error_to_string(err), error_to_string(CRYPT_OK));
               exit(EXIT_FAILURE);
            }
@@ -794,7 +801,7 @@ static void time_rsa(void)
        for (y = 0; y < 2048; y++) {
           t_start();
           t1 = t_read();
-          if ((err = rsa_verify_hash(buf[1], z, buf[0], 20, find_hash("sha1"), 8, &stat, &key)) != CRYPT_OK) {
+          if ((err = rsa_verify_hash_v2(buf[1], z, buf[0], 20, &rsa_params, &stat, &key)) != CRYPT_OK) {
               fprintf(stderr, "\n\nrsa_verify_hash says %s, wait...no it should say %s...damn you!\n", error_to_string(err), error_to_string(CRYPT_OK));
               exit(EXIT_FAILURE);
           }
