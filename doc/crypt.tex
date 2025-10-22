@@ -4397,171 +4397,6 @@ RSA wrote the PKCS \#1 specifications which detail RSA Public Key Cryptography. 
 padding algorithms for encryption and signatures.  The standard includes the \textit{v1.5} and \textit{v2.1} algorithms.
 To simplify matters a little the v2.1 encryption and signature padding algorithms are called OAEP and PSS respectively.
 
-\mysection{PKCS \#1 Padding}
-PKCS \#1 v1.5 padding is so simple that both signature and encryption padding are performed by the same function.  Note: the
-signature padding does \textbf{not} include the ASN.1 padding required.  That is performed by the rsa\_sign\_hash\_ex() function
-documented later on in this chapter.
-
-\subsection{PKCS \#1 v1.5 Encoding}
-The following function performs PKCS \#1 v1.5 padding:
-\index{pkcs\_1\_v1\_5\_encode()}
-\begin{verbatim}
-int pkcs_1_v1_5_encode(
-    const unsigned char *msg,
-          unsigned long  msglen,
-                    int  block_type,
-          unsigned long  modulus_bitlen,
-             prng_state *prng,
-                    int  prng_idx,
-          unsigned char *out,
-          unsigned long *outlen);
-\end{verbatim}
-
-This will encode the message pointed to by \textit{msg} of length \textit{msglen} octets.  The \textit{block\_type} parameter must be set to
-\textbf{LTC\_PKCS\_1\_EME} to perform encryption padding.  It must be set to \textbf{LTC\_PKCS\_1\_EMSA} to perform signature padding.  The \textit{modulus\_bitlen}
-parameter indicates the length of the modulus in bits.  The padded data is stored in \textit{out} with a length of \textit{outlen} octets.  The output will not be
-longer than the modulus which helps allocate the correct output buffer size.
-
-Only encryption padding requires a PRNG.  When performing signature padding the \textit{prng\_idx} parameter may be left to zero as it is not checked for validity.
-
-\subsection{PKCS \#1 v1.5 Decoding}
-The following function performs PKCS \#1 v1.5 de--padding:
-\index{pkcs\_1\_v1\_5\_decode()}
-\begin{verbatim}
-int pkcs_1_v1_5_decode(
-    const unsigned char *msg,
-          unsigned long  msglen,
-                    int  block_type,
-          unsigned long  modulus_bitlen,
-          unsigned char *out,
-          unsigned long *outlen,
-                    int *is_valid);
-\end{verbatim}
-\index{LTC\_PKCS\_1\_EME} \index{LTC\_PKCS\_1\_EMSA}
-This will remove the PKCS padding data pointed to by \textit{msg} of length \textit{msglen}.  The decoded data is stored in \textit{out} of length
-\textit{outlen}.  If the padding is valid, a 1 is stored in \textit{is\_valid}, otherwise, a 0 is stored.  The \textit{block\_type} parameter must be set to either
-\textbf{LTC\_PKCS\_1\_EME} or \textbf{LTC\_PKCS\_1\_EMSA} depending on whether encryption or signature padding is being removed.
-
-\mysection{PKCS \#1 v2.1 Encryption}
-PKCS \#1 RSA Encryption amounts to OAEP padding of the input message followed by the modular exponentiation.  As far as this portion of
-the library is concerned we are only dealing with th OAEP padding of the message.
-
-\subsection{OAEP Encoding}
-
-The following function performs PKCS \#1 v2.1 encryption padding:
-
-\index{pkcs\_1\_oaep\_encode()}
-\begin{alltt}
-int pkcs_1_oaep_encode(
-    const unsigned char *msg,
-          unsigned long  msglen,
-    const unsigned char *lparam,
-          unsigned long  lparamlen,
-          unsigned long  modulus_bitlen,
-             prng_state *prng,
-                    int  prng_idx,
-                    int  mgf_hash,
-                    int  lparam_hash,
-          unsigned char *out,
-          unsigned long *outlen);
-\end{alltt}
-
-This accepts \textit{msg} as input of length \textit{msglen} which will be OAEP padded.  The \textit{lparam} variable is an additional system specific
-tag that can be applied to the encoding.  This is useful to identify which system encoded the message.  If no variance is desired then
-\textit{lparam} can be set to \textbf{NULL}.
-
-OAEP encoding requires the length of the modulus in bits in order to calculate the size of the output.  This is passed as the parameter
-\textit{modulus\_bitlen}.  \textit{mgf\_hash} is the index into the hash descriptor table of the hash desired for the mask generation function (MGF).
-\textit{lparam\_hash} is the index into the hash descriptor table of the hash desired for the \textit{lparam}.  This value can also be set to $-1$
-to indicate usage of the same algorithm than for the MGF.  PKCS \#1 allows any hash to be
-used but both the encoder and decoder must use the same hash in order for this to succeed.  The size of hash output affects the maximum
- sized input message.  \textit{prng\_idx} and \textit{prng} are the random number generator arguments required to randomize the padding process.
-The padded message is stored in \textit{out} along with the length in \textit{outlen}.
-
-If $h$ is the length of the hash and $m$ the length of the modulus (both in octets) then the maximum payload for \textit{msg} is
-$m - 2h - 2$.  For example, with a $1024$--bit RSA key and SHA--1 as the hash the maximum payload is $86$ bytes.
-
-Note that when the message is padded it still has not been RSA encrypted.  You must pass the output of this function to
-rsa\_exptmod() to encrypt it.
-
-\subsection{OAEP Decoding}
-
-\index{pkcs\_1\_oaep\_decode()}
-\begin{alltt}
-int pkcs_1_oaep_decode(
-    const unsigned char *msg,
-          unsigned long  msglen,
-    const unsigned char *lparam,
-          unsigned long  lparamlen,
-          unsigned long  modulus_bitlen,
-                    int  mgf_hash,
-                    int  lparam_hash,
-          unsigned char *out,
-          unsigned long *outlen,
-                    int *res);
-\end{alltt}
-
-This function decodes an OAEP encoded message and outputs the original message that was passed to the OAEP encoder.  \textit{msg} is the
-output of pkcs\_1\_oaep\_encode() of length \textit{msglen}.  \textit{lparam} is the same system variable passed to the OAEP encoder.  If it does not
-match what was used during encoding this function will not decode the packet.  \textit{modulus\_bitlen} is the size of the RSA modulus in bits
-and must match what was used during encoding.  Similarly the \textit{mgf\_hash} and \textit{lparam\_hash} indexes into the hash descriptor table must
-match what was used during encoding.
-
-If the function succeeds it decodes the OAEP encoded message into \textit{out} of length \textit{outlen} and stores a
-$1$ in \textit{res}.  If the packet is invalid it stores $0$ in \textit{res} and if the function fails for another reason
-it returns an error code.
-
-\mysection{PKCS \#1 Digital Signatures}
-
-\subsection{PSS Encoding}
-PSS encoding is the second half of the PKCS \#1 standard which is padding to be applied to messages that are signed.
-
-\index{pkcs\_1\_pss\_encode()}
-\begin{alltt}
-int pkcs_1_pss_encode(
-    const unsigned char *msghash,
-          unsigned long  msghashlen,
-          unsigned long  saltlen,
-             prng_state *prng,
-                    int  prng_idx,
-                    int  hash_idx,
-          unsigned long  modulus_bitlen,
-          unsigned char *out,
-          unsigned long *outlen);
-\end{alltt}
-
-This function assumes the message to be PSS encoded has previously been hashed.  The input hash \textit{msghash} is of length
-\textit{msghashlen}.  PSS allows a variable length random salt (it can be zero length) to be introduced in the signature process.
-\textit{hash\_idx} is the index into the hash descriptor table of the hash to use.  \textit{prng\_idx} and \textit{prng} are the random
-number generator information required for the salt.
-
-Similar to OAEP encoding \textit{modulus\_bitlen} is the size of the RSA modulus (in bits).  It limits the size of the salt.  If $m$ is the length
-of the modulus $h$ the length of the hash output (in octets) then there can be $m - h - 2$ bytes of salt.
-
-This function does not actually sign the data it merely pads the hash of a message so that it can be processed by rsa\_exptmod().
-
-\subsection{PSS Decoding}
-
-To decode a PSS encoded signature block you have to use the following.
-
-\index{pkcs\_1\_pss\_decode()}
-\begin{alltt}
-int pkcs_1_pss_decode(
-    const unsigned char *msghash,
-          unsigned long  msghashlen,
-    const unsigned char *sig,
-          unsigned long  siglen,
-          unsigned long  saltlen,
-                    int  hash_idx,
-          unsigned long  modulus_bitlen,
-                    int *res);
-\end{alltt}
-This will decode the PSS encoded message in \textit{sig} of length \textit{siglen} and compare it to values in \textit{msghash} of length
-\textit{msghashlen}.  If the block is a valid PSS block and the decoded hash equals the hash supplied \textit{res} is set to non--zero.  Otherwise,
-it is set to zero.  The rest of the parameters are as in the PSS encode call.
-
-It's important to use the same \textit{saltlen} and hash for both encoding and decoding as otherwise the procedure will not work.
-
 \mysection{RSA Key Operations}
 \subsection{Background}
 
@@ -4662,6 +4497,56 @@ To fetch the key size of an RSA key, use the following function:
 int rsa_get_size(rsa_key *key);
 \end{verbatim}
 This can be used to determine the modulus size of an RSA key.
+
+\mysection{RSA Key Operation Parameters}
+
+The following RSA Key Operations share a struct which holds the parameters used in the operations.
+
+\index{ltc\_rsa\_parameters}
+\begin{small}
+\begin{verbatim}
+typedef struct ltc_rsa_parameters {
+   /** PSS/OAEP or PKCS #1 v1.5 style
+    *  0 -> PKCS #1 v1.5, 1 -> PSS/OAEP */
+   int pss_oaep;
+   /** saltLength is only defined for PSS
+    * If saltLength == 0 -> OAEP, else -> PSS */
+   unsigned long saltlen;
+   /** lparam hash for OAEP
+    *     resp.
+    *  signature hash for PSS
+    * and MGF hash algorithms */
+   const char *hash_alg, *mgf1_hash_alg;
+} ltc_rsa_parameters;
+\end{verbatim}
+\end{small}
+
+\index{ltc\_rsa\_op\_parameters}
+\begin{small}
+\begin{verbatim}
+typedef struct ltc_rsa_op_parameters {
+   /* pss_oaep flag is unused */
+   ltc_rsa_parameters params;
+   /* The padding type */
+   int padding;
+   /* The PRNG to use.
+    * Only required for signing and encryption. */
+   int wprng;
+   prng_state *prng;
+   /* Operation-specific parameters */
+   union {
+      struct {
+         const unsigned char *lparam;
+               unsigned long  lparamlen;
+      } crypt;
+      /* let's make space for potential future extensions */
+      ulong64 dummy[8];
+   } u;
+} ltc_rsa_op_parameters;
+\end{verbatim}
+\end{small}
+
+
 
 \mysection{RSA Key Encryption}
 Normally RSA is used to encrypt short symmetric keys which are then used in block ciphers to encrypt a message.
@@ -8940,7 +8825,7 @@ This will build the library and link against LibTomMath (which must be installed
 The file \textit{tomcrypt\_cfg.h} is what lets you control various high level macros which control the behaviour of the library.  Build options are also
 stored in \textit{tomcrypt\_custom.h} which allow the enabling and disabling of various algorithms.
 
-\subsubsection{ARGTYPE}
+\subsection{ARGTYPE}
 This lets you control how the LTC\_ARGCHK macro will behave.  The macro is used to check pointers inside the functions against
 NULL.  There are four settings for ARGTYPE.  When set to 0, it will have the default behaviour of printing a message to
 stderr and raising a SIGABRT signal.  This is provided so all platforms that use LibTomCrypt can have an error that functions
@@ -8949,7 +8834,7 @@ stderr then return execution to the caller.  This could lead to a segmentation f
 if you handle signals on your own.  When set to 3, it will resolve to a empty macro and no error checking will be performed.  Finally, when set
 to 4, it will return CRYPT\_INVALID\_ARG to the caller.
 
-\subsubsection{Endianness}
+\subsection{Endianness}
 There are five macros related to endianness issues.  For little endian platforms define, \textbf{ENDIAN\_LITTLE}.  For big endian
 platforms define \textbf{ENDIAN\_BIG}.  Similarly when the default word size of an \textit{unsigned long} is 32-bits define \textbf{ENDIAN\_32BITWORD}
 or define \textbf{ENDIAN\_64BITWORD} when its 64-bits.  If you do not define any of them the library will automatically use \textbf{ENDIAN\_NEUTRAL}
@@ -10323,7 +10208,9 @@ for RSA--1024 the output is always 128 bytes regardless of how small the numeric
 Since the function is given the entire RSA key (for private keys only) CRT is possible as prescribed in the PKCS \#1 v2.1 specification.
 
 
-\mysection{Deprecated API functions}
+\chapter{Deprecated API functions}
+
+\mysection{After v1.18.2}
 
 \subsection{Elliptic Curve Cryptography - $GF(p)$}
 
@@ -10374,6 +10261,347 @@ int ecc_verify_hash_rfc7518(const unsigned char *sig,
 
 These two ECC verify functions have been deprecated in favor of \code{ecc\_verify\_hash\_v2()}.
 Please check Chapter \ref{ecc-verify} for details.
+
+\subsection{PKCS \#1 Padding}
+PKCS \#1 v1.5 padding is so simple that both signature and encryption padding are performed by the same function.  Note: the
+signature padding does \textbf{not} include the ASN.1 padding required.  That is performed by the rsa\_sign\_hash\_ex() function
+documented later on in this chapter.
+
+\subsection{PKCS \#1 v1.5 Encoding}
+The following function performs PKCS \#1 v1.5 padding:
+\index{pkcs\_1\_v1\_5\_encode()}
+\begin{verbatim}
+int pkcs_1_v1_5_encode(
+    const unsigned char *msg,
+          unsigned long  msglen,
+                    int  block_type,
+          unsigned long  modulus_bitlen,
+             prng_state *prng,
+                    int  prng_idx,
+          unsigned char *out,
+          unsigned long *outlen);
+\end{verbatim}
+
+This will encode the message pointed to by \textit{msg} of length \textit{msglen} octets.  The \textit{block\_type} parameter must be set to
+\textbf{LTC\_PKCS\_1\_EME} to perform encryption padding.  It must be set to \textbf{LTC\_PKCS\_1\_EMSA} to perform signature padding.  The \textit{modulus\_bitlen}
+parameter indicates the length of the modulus in bits.  The padded data is stored in \textit{out} with a length of \textit{outlen} octets.  The output will not be
+longer than the modulus which helps allocate the correct output buffer size.
+
+Only encryption padding requires a PRNG.  When performing signature padding the \textit{prng\_idx} parameter may be left to zero as it is not checked for validity.
+
+\subsection{PKCS \#1 v1.5 Decoding}
+The following function performs PKCS \#1 v1.5 de--padding:
+\index{pkcs\_1\_v1\_5\_decode()}
+\begin{verbatim}
+int pkcs_1_v1_5_decode(
+    const unsigned char *msg,
+          unsigned long  msglen,
+                    int  block_type,
+          unsigned long  modulus_bitlen,
+          unsigned char *out,
+          unsigned long *outlen,
+                    int *is_valid);
+\end{verbatim}
+\index{LTC\_PKCS\_1\_EME} \index{LTC\_PKCS\_1\_EMSA}
+This will remove the PKCS padding data pointed to by \textit{msg} of length \textit{msglen}.  The decoded data is stored in \textit{out} of length
+\textit{outlen}.  If the padding is valid, a 1 is stored in \textit{is\_valid}, otherwise, a 0 is stored.  The \textit{block\_type} parameter must be set to either
+\textbf{LTC\_PKCS\_1\_EME} or \textbf{LTC\_PKCS\_1\_EMSA} depending on whether encryption or signature padding is being removed.
+
+\mysection{PKCS \#1 v2.1 Encryption}
+PKCS \#1 RSA Encryption amounts to OAEP padding of the input message followed by the modular exponentiation.  As far as this portion of
+the library is concerned we are only dealing with the OAEP padding of the message.
+
+\subsection{OAEP Encoding}
+
+The following function performs PKCS \#1 v2.1 encryption padding:
+
+\index{pkcs\_1\_oaep\_encode()}
+\begin{alltt}
+int pkcs_1_oaep_encode(
+    const unsigned char *msg,
+          unsigned long  msglen,
+    const unsigned char *lparam,
+          unsigned long  lparamlen,
+          unsigned long  modulus_bitlen,
+             prng_state *prng,
+                    int  prng_idx,
+                    int  mgf_hash,
+                    int  lparam_hash,
+          unsigned char *out,
+          unsigned long *outlen);
+\end{alltt}
+
+This accepts \textit{msg} as input of length \textit{msglen} which will be OAEP padded.  The \textit{lparam} variable is an additional system specific
+tag that can be applied to the encoding.  This is useful to identify which system encoded the message.  If no variance is desired then
+\textit{lparam} can be set to \textbf{NULL}.
+
+OAEP encoding requires the length of the modulus in bits in order to calculate the size of the output.  This is passed as the parameter
+\textit{modulus\_bitlen}.  \textit{mgf\_hash} is the index into the hash descriptor table of the hash desired for the mask generation function (MGF).
+\textit{lparam\_hash} is the index into the hash descriptor table of the hash desired for the \textit{lparam}.  This value can also be set to $-1$
+to indicate usage of the same algorithm than for the MGF.  PKCS \#1 allows any hash to be
+used but both the encoder and decoder must use the same hash in order for this to succeed.  The size of hash output affects the maximum
+ sized input message.  \textit{prng\_idx} and \textit{prng} are the random number generator arguments required to randomize the padding process.
+The padded message is stored in \textit{out} along with the length in \textit{outlen}.
+
+If $h$ is the length of the hash and $m$ the length of the modulus (both in octets) then the maximum payload for \textit{msg} is
+$m - 2h - 2$.  For example, with a $1024$--bit RSA key and SHA--1 as the hash the maximum payload is $86$ bytes.
+
+Note that when the message is padded it still has not been RSA encrypted.  You must pass the output of this function to
+rsa\_exptmod() to encrypt it.
+
+\subsection{OAEP Decoding}
+
+\index{pkcs\_1\_oaep\_decode()}
+\begin{alltt}
+int pkcs_1_oaep_decode(
+    const unsigned char *msg,
+          unsigned long  msglen,
+    const unsigned char *lparam,
+          unsigned long  lparamlen,
+          unsigned long  modulus_bitlen,
+                    int  mgf_hash,
+                    int  lparam_hash,
+          unsigned char *out,
+          unsigned long *outlen,
+                    int *res);
+\end{alltt}
+
+This function decodes an OAEP encoded message and outputs the original message that was passed to the OAEP encoder.  \textit{msg} is the
+output of pkcs\_1\_oaep\_encode() of length \textit{msglen}.  \textit{lparam} is the same system variable passed to the OAEP encoder.  If it does not
+match what was used during encoding this function will not decode the packet.  \textit{modulus\_bitlen} is the size of the RSA modulus in bits
+and must match what was used during encoding.  Similarly the \textit{mgf\_hash} and \textit{lparam\_hash} indexes into the hash descriptor table must
+match what was used during encoding.
+
+If the function succeeds it decodes the OAEP encoded message into \textit{out} of length \textit{outlen} and stores a
+$1$ in \textit{res}.  If the packet is invalid it stores $0$ in \textit{res} and if the function fails for another reason
+it returns an error code.
+
+\mysection{PKCS \#1 Digital Signatures}
+
+\subsection{PSS Encoding}
+PSS encoding is the second half of the PKCS \#1 standard which is padding to be applied to messages that are signed.
+
+\index{pkcs\_1\_pss\_encode()}
+\begin{alltt}
+int pkcs_1_pss_encode(
+    const unsigned char *msghash,
+          unsigned long  msghashlen,
+          unsigned long  saltlen,
+             prng_state *prng,
+                    int  prng_idx,
+                    int  hash_idx,
+          unsigned long  modulus_bitlen,
+          unsigned char *out,
+          unsigned long *outlen);
+\end{alltt}
+
+This function assumes the message to be PSS encoded has previously been hashed.  The input hash \textit{msghash} is of length
+\textit{msghashlen}.  PSS allows a variable length random salt (it can be zero length) to be introduced in the signature process.
+\textit{hash\_idx} is the index into the hash descriptor table of the hash to use.  \textit{prng\_idx} and \textit{prng} are the random
+number generator information required for the salt.
+
+Similar to OAEP encoding \textit{modulus\_bitlen} is the size of the RSA modulus (in bits).  It limits the size of the salt.  If $m$ is the length
+of the modulus $h$ the length of the hash output (in octets) then there can be $m - h - 2$ bytes of salt.
+
+This function does not actually sign the data it merely pads the hash of a message so that it can be processed by rsa\_exptmod().
+
+\subsection{PSS Decoding}
+
+To decode a PSS encoded signature block you have to use the following.
+
+\index{pkcs\_1\_pss\_decode()}
+\begin{alltt}
+int pkcs_1_pss_decode(
+    const unsigned char *msghash,
+          unsigned long  msghashlen,
+    const unsigned char *sig,
+          unsigned long  siglen,
+          unsigned long  saltlen,
+                    int  hash_idx,
+          unsigned long  modulus_bitlen,
+                    int *res);
+\end{alltt}
+This will decode the PSS encoded message in \textit{sig} of length \textit{siglen} and compare it to values in \textit{msghash} of length
+\textit{msghashlen}.  If the block is a valid PSS block and the decoded hash equals the hash supplied \textit{res} is set to non--zero.  Otherwise,
+it is set to zero.  The rest of the parameters are as in the PSS encode call.
+
+It's important to use the same \textit{saltlen} and hash for both encoding and decoding as otherwise the procedure will not work.
+
+\mysection{RSA Key Encryption}
+
+\index{rsa\_encrypt\_key()}
+\begin{verbatim}
+int rsa_encrypt_key(
+    const unsigned char *in,
+          unsigned long  inlen,
+          unsigned char *out,
+          unsigned long *outlen,
+    const unsigned char *lparam,
+          unsigned long  lparamlen,
+             prng_state *prng,
+                    int  prng_idx,
+                    int  hash_idx,
+                rsa_key *key);
+\end{verbatim}
+This function will OAEP pad \textit{in} of length \textit{inlen} bytes, RSA encrypt it, and store the ciphertext
+in \textit{out} of length \textit{outlen} octets.  The \textit{lparam} and \textit{lparamlen} are the same parameters you would pass
+to \index{pkcs\_1\_oaep\_encode()} pkcs\_1\_oaep\_encode().
+
+\subsection{Extended Encryption}
+As of v1.15, the library supports both v1.5 and v2.1 PKCS \#1 style paddings in these higher level functions.  The following is the extended
+encryption function:
+
+\index{rsa\_encrypt\_key\_ex()}
+\begin{verbatim}
+int rsa_encrypt_key_ex(
+    const unsigned char *in,
+          unsigned long  inlen,
+          unsigned char *out,
+          unsigned long *outlen,
+    const unsigned char *lparam,
+          unsigned long  lparamlen,
+             prng_state *prng,
+                    int  prng_idx,
+                    int  mgf_hash,
+                    int  lparam_hash,
+                    int  padding,
+                rsa_key *key);
+\end{verbatim}
+
+\mysection{RSA Key Decryption}
+\index{rsa\_decrypt\_key()}
+\begin{verbatim}
+int rsa_decrypt_key(
+    const unsigned char *in,
+          unsigned long  inlen,
+          unsigned char *out,
+          unsigned long *outlen,
+    const unsigned char *lparam,
+          unsigned long  lparamlen,
+                    int  mgf_hash,
+                    int  lparam_hash,
+                    int *stat,
+                rsa_key *key);
+\end{verbatim}
+This function will RSA decrypt \textit{in} of length \textit{inlen} then OAEP de-pad the resulting data and store it in
+\textit{out} of length \textit{outlen}.  The \textit{lparam} and \textit{lparamlen} are the same parameters you would pass
+to pkcs\_1\_oaep\_decode().
+
+If the RSA decrypted data is not a valid OAEP packet then \textit{stat} is set to $0$.  Otherwise, it is set to $1$.
+
+\subsection{Extended Decryption}
+As of v1.15, the library supports both v1.5 and v2.1 PKCS \#1 style paddings in these higher level functions.  The following is the extended
+decryption function:
+
+\index{rsa\_decrypt\_key\_ex()}
+\begin{verbatim}
+int rsa_decrypt_key_ex(
+    const unsigned char *in,
+          unsigned long  inlen,
+          unsigned char *out,
+          unsigned long *outlen,
+    const unsigned char *lparam,
+          unsigned long  lparamlen,
+                    int  hash_idx,
+                    int  padding,
+                    int *stat,
+                rsa_key *key);
+\end{verbatim}
+
+\mysection{RSA Signature Generation}
+Similar to RSA key encryption RSA is also used to \textit{digitally sign} message digests (hashes).  To facilitate this
+process the following functions have been provided.
+
+\index{rsa\_sign\_hash()}
+\begin{verbatim}
+int rsa_sign_hash(const unsigned char *in,
+                        unsigned long  inlen,
+                        unsigned char *out,
+                        unsigned long *outlen,
+                           prng_state *prng,
+                                  int  prng_idx,
+                                  int  hash_idx,
+                        unsigned long  saltlen,
+                              rsa_key *key);
+\end{verbatim}
+
+This will PSS encode the message digest pointed to by \textit{in} of length \textit{inlen} octets.  Next, the PSS encoded hash will be RSA
+\textit{signed} and the output stored in the buffer pointed to by \textit{out} of length \textit{outlen} octets.
+
+The \textit{hash\_idx} parameter indicates which hash will be used to create the PSS encoding.  It should be the same as the hash used to
+hash the message being signed.  The \textit{saltlen} parameter indicates the length of the desired salt, and should typically be small.  A good
+default value is between 8 and 16 octets.  Strictly, it must be small than $modulus\_len - hLen - 2$ where \textit{modulus\_len} is the size of
+the RSA modulus (in octets), and \textit{hLen} is the length of the message digest produced by the chosen hash.
+
+\subsection{Extended Signatures}
+
+As of v1.15, the library supports both v1.5 and v2.1 signatures.  The extended signature generation function has the following prototype:
+
+\index{rsa\_sign\_hash\_ex()}
+\begin{verbatim}
+int rsa_sign_hash_ex(
+    const unsigned char *in,
+          unsigned long  inlen,
+          unsigned char *out,
+          unsigned long *outlen,
+                    int  padding,
+          prng_state    *prng,
+                    int  prng_idx,
+                    int  hash_idx,
+          unsigned long  saltlen,
+                rsa_key *key);
+\end{verbatim}
+
+This will PKCS encode the message digest pointed to by \textit{in} of length \textit{inlen} octets.  Next, the PKCS encoded hash will be RSA
+\textit{signed} and the output stored in the buffer pointed to by \textit{out} of length \textit{outlen} octets.  The \textit{padding} parameter
+must be set to \textbf{LTC\_PKCS\_1\_V1\_5} to produce a v1.5 signature, otherwise, it must be set to \textbf{LTC\_PKCS\_1\_PSS} to produce a
+v2.1 signature.
+
+\index{LTC\_PKCS\_1\_V1\_5\_NA1}
+As of v1.18.0, the library also supports v1.5 signature generation without ASN.1 encoding the signature which can be indicated by passing
+\textbf{LTC\_PKCS\_1\_V1\_5\_NA1} as \textit{padding} parameter. This option has been introduced to provide compatibilty to SSL3.0 implementations
+which implemented this.
+
+When generating a standard v1.5 signature the \textit{prng}, and \textit{prng\_idx} parameters are ignored.
+When generating a v1.5 signature without ASN.1 decoding additionally the textit{hash\_idx} parameter is ignored.
+
+\mysection{RSA Signature Verification}
+\index{rsa\_verify\_hash()}
+\begin{verbatim}
+int rsa_verify_hash(const unsigned char *sig,
+                          unsigned long  siglen,
+                    const unsigned char *msghash,
+                          unsigned long  msghashlen,
+                                    int  hash_idx,
+                          unsigned long  saltlen,
+                                    int *stat,
+                                rsa_key *key);
+\end{verbatim}
+
+This will RSA \textit{verify} the signature pointed to by \textit{sig} of length \textit{siglen} octets.  Next, the RSA decoded data is PSS decoded
+and the extracted hash is compared against the message digest pointed to by \textit{msghash} of length \textit{msghashlen} octets.
+
+If the RSA decoded data is not a valid PSS message, or if the PSS decoded hash does not match the \textit{msghash}
+value, \textit{res} is set to $0$.  Otherwise, if the function succeeds, and signature is valid \textit{res} is set to $1$.
+
+\subsection{Extended Verification}
+
+As of v1.15, the library supports both v1.5 and v2.1 signature verification.  The extended signature verification function has the following prototype:
+
+\index{rsa\_verify\_hash\_ex()}
+\begin{verbatim}
+int rsa_verify_hash_ex(
+    const unsigned char *sig,
+          unsigned long  siglen,
+    const unsigned char *hash,
+          unsigned long  hashlen,
+                    int  padding,
+                    int  hash_idx,
+          unsigned long  saltlen,
+                    int *stat,
+                rsa_key *key);
+\end{verbatim}
+
 
 \clearpage
 \addcontentsline{toc}{chapter}{Index}

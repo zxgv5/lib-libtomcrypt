@@ -10,9 +10,12 @@
 
 int pkcs_1_emsa_test(void)
 {
+  ltc_rsa_op_parameters rsa_params = {
+                                      .params.hash_alg = "sha1",
+                                      .padding = LTC_PKCS_1_V1_5
+  };
   int hash_idx = find_hash("sha1");
-  unsigned int i;
-  unsigned int j;
+  unsigned int i, j;
 
   if (ltc_mp.name == NULL) return CRYPT_NOP;
 
@@ -39,10 +42,10 @@ int pkcs_1_emsa_test(void)
         unsigned long buflen = sizeof(buf), obuflen = sizeof(obuf);
         int stat;
         DOX(hash_memory(hash_idx, s->o1, s->o1_l, buf, &buflen), s->name);
-        DOX(rsa_sign_hash_ex(buf, buflen, obuf, &obuflen, LTC_PKCS_1_V1_5, NULL, -1, hash_idx, -1, 0, key), s->name);
+        DOX(rsa_sign_hash_v2(buf, buflen, obuf, &obuflen, &rsa_params, key), s->name);
         COMPARE_TESTVECTOR(obuf, obuflen, s->o2, s->o2_l,s->name, j);
-        DOX(rsa_verify_hash_ex(obuf, obuflen, buf, buflen, LTC_PKCS_1_V1_5, hash_idx, -1, 0, &stat, key), s->name);
-        DOX(stat == 1?CRYPT_OK:CRYPT_FAIL_TESTVECTOR, s->name);
+        DOX(rsa_verify_hash_v2(obuf, obuflen, buf, buflen, &rsa_params, &stat, key), s->name);
+        ENSUREX(stat == 1, s->name);
     } /* for */
 
     ltc_mp_deinit_multi(key->d,  key->e, key->N, key->dQ, key->dP, key->qP, key->p, key->q, LTC_NULL);
